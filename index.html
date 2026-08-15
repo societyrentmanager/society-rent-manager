@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Society Manager</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#f4f7fb;
+    color:#172033;
+}
+
+header{
+    background:#172033;
+    color:white;
+    padding:20px;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+    padding:20px;
+}
+
+.card{
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+    box-shadow:0 4px 15px rgba(0,0,0,.06);
+}
+
+input,select{
+    width:100%;
+    padding:12px;
+    margin:6px 0 14px;
+    border:1px solid #d5dce8;
+    border-radius:9px;
+    box-sizing:border-box;
+}
+
+button{
+    width:100%;
+    padding:13px;
+    border:0;
+    border-radius:9px;
+    background:#2563eb;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#1d4ed8;
+}
+
+.message{
+    margin-top:12px;
+    padding:10px;
+    border-radius:8px;
+    display:none;
+}
+
+.success{
+    display:block;
+    background:#dcfce7;
+    color:#166534;
+}
+
+.error{
+    display:block;
+    background:#fee2e2;
+    color:#991b1b;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th,td{
+    padding:10px;
+    border-bottom:1px solid #eee;
+    text-align:left;
+}
+
+@media(max-width:600px){
+    .container{
+        padding:12px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <div class="container">
+        <h2>🏢 Society Manager</h2>
+        <div>Building & Room Management</div>
+    </div>
+</header>
+
+<div class="container">
+
+<div class="card">
+
+<h3>Add Building</h3>
+
+<label>Building Name</label>
+<input id="buildingName" placeholder="Building A">
+
+<label>Address</label>
+<input id="buildingAddress" placeholder="Optional">
+
+<button onclick="addBuilding()">
+Add Building
+</button>
+
+<div id="buildingMessage" class="message"></div>
+
+</div>
+
+
+<div class="card">
+
+<h3>Add Room</h3>
+
+<label>Building</label>
+<select id="buildingSelect">
+<option value="">Loading buildings...</option>
+</select>
+
+<label>Room Number</label>
+<input id="roomNumber" placeholder="3A">
+
+<label>Tenant Name (Optional)</label>
+<input id="tenantName" placeholder="Optional">
+
+<label>Phone (Optional)</label>
+<input id="tenantPhone" placeholder="Optional">
+
+<label>Monthly Rent (Optional)</label>
+<input id="monthlyRent" type="number" placeholder="10000">
+
+<button onclick="addRoom()">
+Add Room
+</button>
+
+<div id="roomMessage" class="message"></div>
+
+</div>
+
+
+<div class="card">
+
+<h3>Rooms</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Building</th>
+<th>Room</th>
+<th>Tenant</th>
+<th>Phone</th>
+<th>Rent</th>
+</tr>
+</thead>
+
+<tbody id="roomList">
+
+<tr>
+<td colspan="5">
+Loading...
+</td>
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<script>
+
+/* =========================
+SUPABASE
+========================= */
+
+const SUPABASE_URL =
+"https://lyusuzlgkecaxqerobtt.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_j9ABMv3x0QwgEFPle0upmg_IO264jcE";
+
+const db =
+window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+
+/* =========================
+HELPER
+========================= */
+
+function showMessage(id,text,type){
+
+const box =
+document.getElementById(id);
+
+box.textContent = text;
+
+box.className =
+"message " + type;
+
+}
+
+
+/* =========================
+LOAD BUILDINGS
+========================= */
+
+async function loadBuildings(){
+
+const select =
+document.getElementById(
+    "buildingSelect"
+);
+
+const result =
+await db
+.from("buildings")
+.select("id,name")
+.order("name");
+
+
+if(result.error){
+
+console.error(result.error);
+
+select.innerHTML =
+`<option value="">
+Error loading buildings
+</option>`;
+
+return;
+
+}
+
+
+const buildings =
+result.data || [];
+
+
+if(buildings.length === 0){
+
+select.innerHTML =
+`<option value="">
+No building yet
+</option>`;
+
+return;
+
+}
+
+
+select.innerHTML =
+buildings.map(building =>
+
+`<option value="${building.id}">
+${building.name}
+</option>`
+
+).join("");
+
+}
+
+
+/* =========================
+ADD BUILDING
+========================= */
+
+async function addBuilding(){
+
+const name =
+document
+.getElementById("buildingName")
+.value
+.trim();
+
+const address =
+document
+.getElementById("buildingAddress")
+.value
+.trim();
+
+
+if(!name){
+
+showMessage(
+"buildingMessage",
+"Building name required",
+"error"
+);
+
+return;
+
+}
+
+
+const result =
+await db
+.from("buildings")
+.insert({
+
+name:name,
+
+address:
+address || null
+
+})
+.select()
+.single();
+
+
+if(result.error){
+
+console.error(result.error);
+
+showMessage(
+"buildingMessage",
+result.error.message,
+"error"
+);
+
+return;
+
+}
+
+
+document
+.getElementById("buildingName")
+.value="";
+
+document
+.getElementById("buildingAddress")
+.value="";
+
+
+await loadBuildings();
+
+
+showMessage(
+"buildingMessage",
+"Building added successfully!",
+"success"
+);
+
+}
+
+
+/* =========================
+ADD ROOM
+========================= */
+
+async function addRoom(){
+
+console.log("ADD ROOM STARTED");
+
+
+const buildingId =
+document
+.getElementById("buildingSelect")
+.value;
+
+const roomNumber =
+document
+.getElementById("roomNumber")
+.value
+.trim();
+
+const tenantName =
+document
+.getElementById("tenantName")
+.value
+.trim();
+
+const tenantPhone =
+document
+.getElementById("tenantPhone")
+.value
+.trim();
+
+const rentText =
+document
+.getElementById("monthlyRent")
+.value
+.trim();
+
+
+if(!buildingId){
+
+showMessage(
+"roomMessage",
+"Please select a building",
+"error"
+);
+
+return;
+
+}
+
+
+if(!roomNumber){
+
+showMessage(
+"roomMessage",
+"Room number required",
+"error"
+);
+
+return;
+
+}
+
+
+/*
+IMPORTANT:
+If rent is empty -> null
+If rent has value -> number
+*/
+
+let rent = null;
+
+if(rentText !== ""){
+
+rent =
+Number(rentText);
+
+if(
+!Number.isFinite(rent) ||
+rent < 0
+){
+
+showMessage(
+"roomMessage",
+"Invalid monthly rent",
+"error"
+);
+
+return;
+
+}
+
+}
+
+
+/*
+This is the exact data
+sent to Supabase.
+*/
+
+const roomData = {
+
+building_id:
+buildingId,
+
+room_number:
+roomNumber,
+
+tenant_name:
+tenantName || null,
+
+tenant_phone:
+tenantPhone || null,
+
+monthly_rent:
+rent
+
+};
+
+
+console.log(
+"Sending room data:",
+roomData
+);
+
+
+const result =
+await db
+.from("rooms")
+.insert(roomData)
+.select()
+.single();
+
+
+if(result.error){
+
+console.error(
+"ROOM INSERT ERROR:",
+result.error
+);
+
+showMessage(
+"roomMessage",
+result.error.message,
+"error"
+);
+
+return;
+
+}
+
+
+console.log(
+"ROOM INSERT SUCCESS:",
+result.data
+);
+
+
+/* Clear form */
+
+document
+.getElementById("roomNumber")
+.value="";
+
+document
+.getElementById("tenantName")
+.value="";
+
+document
+.getElementById("tenantPhone")
+.value="";
+
+document
+.getElementById("monthlyRent")
+.value="";
+
+
+showMessage(
+"roomMessage",
+"Room added successfully!",
+"success"
+);
+
+
+await loadRooms();
+
+}
+
+
+/* =========================
+LOAD ROOMS
+========================= */
+
+async function loadRooms(){
+
+const result =
+await db
+.from("rooms")
+.select(`
+    id,
+    room_number,
+    tenant_name,
+    tenant_phone,
+    monthly_rent,
+    buildings(name)
+`)
+.order("room_number");
+
+
+if(result.error){
+
+console.error(result.error);
+
+document
+.getElementById("roomList")
+.innerHTML =
+`<tr>
+<td colspan="5">
+${result.error.message}
+</td>
+</tr>`;
+
+return;
+
+}
+
+
+const rooms =
+result.data || [];
+
+
+if(rooms.length === 0){
+
+document
+.getElementById("roomList")
+.innerHTML =
+`<tr>
+<td colspan="5">
+No rooms yet
+</td>
+</tr>`;
+
+return;
+
+}
+
+
+document
+.getElementById("roomList")
+.innerHTML =
+
+rooms.map(room => {
+
+const rent =
+room.monthly_rent == null
+?
+"—"
+:
+"৳" +
+Number(
+room.monthly_rent
+).toLocaleString();
+
+
+return `
+
+<tr>
+
+<td>
+${room.buildings?.name || "—"}
+</td>
+
+<td>
+${room.room_number}
+</td>
+
+<td>
+${room.tenant_name || "—"}
+</td>
+
+<td>
+${room.tenant_phone || "—"}
+</td>
+
+<td>
+${rent}
+</td>
+
+</tr>
+
+`;
+
+}).join("");
+
+}
+
+
+/* =========================
+START
+========================= */
+
+async function start(){
+
+await loadBuildings();
+
+await loadRooms();
+
+}
+
+
+start();
+
+</script>
+
+</body>
+</html>
