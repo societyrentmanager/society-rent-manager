@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Society Rent Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#f5f7fb;color:#18202a}
+header{background:#172033;color:white;padding:15px}.wrap{max-width:1050px;margin:auto;padding:14px}
+.card{background:white;border:1px solid #e1e6ef;border-radius:15px;padding:15px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{font-size:25px;font-weight:800}
+nav{display:flex;gap:8px;overflow:auto;margin-bottom:15px}button{border:0;border-radius:9px;padding:10px 13px;background:#2563eb;color:white;font-weight:700}
+nav button{background:#e7ecf4;color:#18202a;white-space:nowrap}nav button.active{background:#2563eb;color:white}
+input,select,textarea{width:100%;padding:10px;border:1px solid #d5dbe5;border-radius:9px;margin-top:5px}
+textarea{min-height:75px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+section{display:none}section.active{display:block}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #edf0f5;text-align:left;font-size:13px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.muted{color:#687386}.hidden{display:none!important}
+.login{max-width:410px;margin:12vh auto}
+@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}.form{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div id="login" class="wrap"><div class="card login">
+<h1>🏢 Society Rent Manager</h1><p class="muted">Online rent & expense system</p>
+<label>Email</label><input id="email" type="email">
+<label>Password</label><input id="password" type="password">
+<br><br><button onclick="login()">Login</button><p id="msg" class="muted"></p>
+</div></div>
+
+<div id="app" class="hidden">
+<header><div class="wrap row"><b>🏢 Society Rent Manager</b><span id="who"></span><button onclick="logout()">Logout</button></div></header>
+<div class="wrap"><nav id="nav"></nav>
+
+<section id="dash" class="active">
+<h2>Dashboard</h2><div class="grid">
+<div class="card">আজকের Rent<div id="tr" class="stat">৳0</div></div>
+<div class="card">আজকের Expense<div id="te" class="stat">৳0</div></div>
+<div class="card">এই মাসের Rent<div id="mr" class="stat">৳0</div></div>
+<div class="card">এই মাসের Expense<div id="me" class="stat">৳0</div></div>
+</div><div class="card"><b>Net this month:</b> <span id="net">৳0</span></div>
+</section>
+
+<section id="rent"><h2>Rent Collection</h2><div class="card"><div class="form">
+<div><label>Building</label><select id="rb" onchange="roomsForRent()"></select></div>
+<div><label>Room</label><select id="rr"></select></div>
+<div><label>Amount</label><input id="ra" type="number"></div>
+<div><label>Method</label><select id="rm"><option>Cash</option><option>Bank</option><option>bKash</option><option>Nagad</option></select></div>
+<div class="full"><label>Note</label><textarea id="rn"></textarea></div>
+<div class="full"><button onclick="saveRent()">Save Rent</button></div></div></div>
+<div class="card"><div id="rentList"></div></div></section>
+
+<section id="expense"><h2>Expense</h2><div class="card"><div class="form">
+<div><label>Building</label><select id="eb"></select></div>
+<div><label>Category</label><select id="ec"><option>Electricity</option><option>Water</option><option>Repair</option><option>Cleaning</option><option>Bulb/Light</option><option>Other</option></select></div>
+<div><label>Amount</label><input id="ea" type="number"></div>
+<div><label>Memo/Receipt photo</label><input id="file" type="file" accept="image/*"></div>
+<div class="full"><label>Explanation</label><textarea id="ed" placeholder="What was purchased / why?"></textarea></div>
+<div class="full"><button onclick="saveExpense()">Save Expense</button></div></div></div>
+<div class="card"><div id="expenseList"></div></div></section>
+
+<section id="rooms"><h2>Buildings & Rooms</h2><div id="adminBox" class="card">
+<h3>Add Building</h3><div class="form"><input id="bn" placeholder="Building name"><input id="ba" placeholder="Address"><div class="full"><button onclick="addBuilding()">Add</button></div></div>
+<h3>Add Room</h3><div class="form"><select id="roomB"></select><input id="roomNo" placeholder="Room number"><input id="tn" placeholder="Tenant name"><input id="tp" placeholder="Phone"><input id="rent" type="number" placeholder="Monthly rent"><div class="full"><button onclick="addRoom()">Add Room</button></div></div>
+</div><div class="card"><div id="roomList"></div></div></section>
+
+<section id="report"><h2>Reports</h2><div class="card"><div class="form">
+<div><label>From</label><input id="from" type="date"></div><div><label>To</label><input id="to" type="date"></div>
+<div class="full"><button onclick="report()">Generate</button></div></div></div>
+<div class="grid"><div class="card">Rent<div id="rpr" class="stat">৳0</div></div><div class="card">Expense<div id="rpe" class="stat">৳0</div></div><div class="card">Net<div id="rpn" class="stat">৳0</div></div><div class="card">Transactions<div id="rpc" class="stat">0</div></div></div></section>
+</div></div>
+
+<script>
+const SUPABASE_URL="PASTE_YOUR_PROJECT_URL_HERE";
+const SUPABASE_KEY="PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+let db,user,profile,buildings=[],rooms=[];
+
+const $=id=>document.getElementById(id);
+const money=n=>"৳"+Number(n||0).toLocaleString("en-BD");
+const today=()=>new Date().toISOString().slice(0,10);
+const monthStart=()=>{let d=new Date();d.setDate(1);return d.toISOString().slice(0,10)};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+async function boot(){
+ if(SUPABASE_URL.startsWith("PASTE_")){$("msg").textContent="Website setup: Supabase values are not connected yet.";return}
+ db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+ const {data:{session}}=await db.auth.getSession();
+ if(session) openApp(session.user); else $("login").classList.remove("hidden");
+}
+async function login(){let {error}=await db.auth.signInWithPassword({email:$("email").value,password:$("password").value});if(error)$("msg").textContent=error.message}
+async function logout(){await db.auth.signOut();location.reload()}
+async function openApp(u){
+ user=u; $("login").classList.add("hidden");$("app").classList.remove("hidden");
+ let p=await db.from("profiles").select("*").eq("id",u.id).single();profile=p.data;
+ $("who").textContent=(profile?.full_name||u.email)+" • "+(profile?.role||"staff");
+ let tabs=[["dash","Dashboard"],["rent","Rent"],["expense","Expense"],["rooms","Buildings/Rooms"],["report","Reports"]];
+ $("nav").innerHTML=tabs.map(x=>`<button onclick="tab('${x[0]}')">${x[1]}</button>`).join("");
+ if(profile?.role!=="admin")$("adminBox").classList.add("hidden");
+ await load();
+}
+function tab(id){document.querySelectorAll("section").forEach(x=>x.classList.remove("active"));$(id).classList.add("active")}
+async function load(){
+ buildings=(await db.from("buildings").select("*").order("name")).data||[];
+ rooms=(await db.from("rooms").select("*,buildings(name)").eq("active",true).order("room_number")).data||[];
+ ["rb","eb","roomB"].forEach(id=>$(id).innerHTML=buildings.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join(""));
+ roomsForRent(); renderRooms(); renderRent(); renderExpenses(); dashboard();
+}
+function roomsForRent(){let bid=$("rb").value;$("rr").innerHTML=rooms.filter(r=>r.building_id===bid).map(r=>`<option value="${r.id}">${esc(r.room_number)} — ${esc(r.tenant_name)}</option>`).join("")}
+async function addBuilding(){if(profile.role!=="admin")return alert("Admin only");let {error}=await db.from("buildings").insert({name:$("bn").value,address:$("ba").value});if(error)alert(error.message);else load()}
+async function addRoom(){if(profile.role!=="admin")return alert("Admin only");let x={building_id:$("roomB").value,room_number:$("roomNo").value,tenant_name:$("tn").value,tenant_phone:$("tp").value,monthly_rent:Number($("rent").value||0)};let {error}=await db.from("rooms").insert(x);if(error)alert(error.message);else load()}
+async function saveRent(){let x={room_id:$("rr").value,amount:Number($("ra").value),payment_method:$("rm").value,note:$("rn").value,collected_by:user.id};let {error}=await db.from("rent_payments").insert(x);if(error)alert(error.message);else{alert("Rent saved");$("ra").value="";load()}}
+async function saveExpense(){let amount=Number($("ea").value),desc=$("ed").value;if(!amount||!desc)return alert("Amount and explanation required");let path=null,f=$("file").files[0];if(f){let p=user.id+"/"+Date.now()+"_"+f.name.replace(/[^a-zA-Z0-9._-]/g,"_");let up=await db.storage.from("receipts").upload(p,f);if(up.error)return alert("Receipt upload needs a Storage bucket named receipts.");path=p}let x={building_id:$("eb").value||null,category:$("ec").value,description:desc,amount,paid_by:user.id,receipt_path:path};let {error}=await db.from("expenses").insert(x);if(error)alert(error.message);else{alert("Expense saved");$("ea").value="";$("ed").value="";load()}}
+async function sum(table,datecol,a,b){let q=await db.from(table).select("amount").gte(datecol,a).lte(datecol,b);return(q.data||[]).reduce((s,x)=>s+Number(x.amount||0),0)}
+async function dashboard(){let d=today(),m=monthStart();let a=await sum("rent_payments","payment_date",d,d),b=await sum("expenses","expense_date",d,d),c=await sum("rent_payments","payment_date",m,d),e=await sum("expenses","expense_date",m,d);$("tr").textContent=money(a);$("te").textContent=money(b);$("mr").textContent=money(c);$("me").textContent=money(e);$("net").textContent=money(c-e)}
+async function renderRent(){let q=await db.from("rent_payments").select("*,rooms(room_number,tenant_name,buildings(name)),profiles(full_name)").order("created_at",{ascending:false}).limit(50);$("rentList").innerHTML="<div style='overflow:auto'><table><tr><th>Date</th><th>Room</th><th>Tenant</th><th>Amount</th><th>Collected by</th></tr>"+(q.data||[]).map(x=>`<tr><td>${x.payment_date}</td><td>${esc(x.rooms?.buildings?.name)} / ${esc(x.rooms?.room_number)}</td><td>${esc(x.rooms?.tenant_name)}</td><td>${money(x.amount)}</td><td>${esc(x.profiles?.full_name)}</td></tr>`).join("")+"</table></div>"}
+async function renderExpenses(){let q=await db.from("expenses").select("*,buildings(name),profiles(full_name)").order("created_at",{ascending:false}).limit(50);$("expenseList").innerHTML="<div style='overflow:auto'><table><tr><th>Date</th><th>Building</th><th>Category</th><th>Description</th><th>Amount</th><th>By</th></tr>"+(q.data||[]).map(x=>`<tr><td>${x.expense_date}</td><td>${esc(x.buildings?.name)}</td><td>${esc(x.category)}</td><td>${esc(x.description)}</td><td>${money(x.amount)}</td><td>${esc(x.profiles?.full_name)}</td></tr>`).join("")+"</table></div>"}
+function renderRooms(){$("roomList").innerHTML="<table><tr><th>Building</th><th>Room</th><th>Tenant</th><th>Monthly Rent</th></tr>"+rooms.map(r=>`<tr><td>${esc(r.buildings?.name)}</td><td>${esc(r.room_number)}</td><td>${esc(r.tenant_name)}</td><td>${money(r.monthly_rent)}</td></tr>`).join("")+"</table>"}
+async function report(){let a=$("from").value||monthStart(),b=$("to").value||today(),r=await sum("rent_payments","payment_date",a,b),e=await sum("expenses","expense_date",a,b);$("rpr").textContent=money(r);$("rpe").textContent=money(e);$("rpn").textContent=money(r-e);let x=await db.from("rent_payments").select("id").gte("payment_date",a).lte("payment_date",b),y=await db.from("expenses").select("id").gte("expense_date",a).lte("expense_date",b);$("rpc").textContent=(x.data?.length||0)+(y.data?.length||0)}
+boot();
+</script>
+</body>
+</html>
